@@ -55,7 +55,7 @@ class PeerList(linked_list.LinkedList):
     """
 
     def search(self, cookie):
-        current = self.head
+        current = self.get_head()
         found = False
         while current and not found:
             if current.get_cookie() == cookie:
@@ -67,10 +67,14 @@ class PeerList(linked_list.LinkedList):
 
     def active_to_string(self):
         active_str = ""
-        current = self.head
+        current = self.get_head()
         while current:
+            print(current.get_hostname())
             if current.is_active():
-                active_str.join([current.get_hostname(), ":", str(current.get_port(), "\n")])
+                active_str += current.get_hostname() + ":" + str(current.get_port()) + "\n"
+                print(active_str)
+
+            current = current.get_next()
 
         return active_str
 
@@ -90,23 +94,22 @@ class RegServer(socketserver.BaseRequestHandler):
 
         if m:
             try:
-                hostname = socket.gethostbyaddr(self.client_address)[0]
+                hostname = socket.gethostbyaddr(self.client_address[0])[0]
             except:
-                hostname = self.client_address
+                hostname = self.client_address[0]
             cookie = self.cookie_index
             self.cookie_index += 1
             active = True
             ttl = TTL_INIT
-            port = super.socket.getpeername()[1]
+            port = self.client_address[1]
             num_active = 1
-            time = time.time()
-            recent_timestamp = datetime.datetime.fromtimestamp(time).strftime("%Y-%m-%d %H:%M:%S")
+            t_utc = time.time()
+            recent_timestamp = datetime.datetime.fromtimestamp(t_utc).strftime("%Y-%m-%d %H:%M:%S")
             peer = Peer(hostname, cookie, active, ttl, port, num_active, recent_timestamp)
-            print(peer)
 
             self.peer_list.add_head(peer)
-
-            self.request.sendall(self.peer_list.active_to_string())
+            print(self.peer_list.active_to_string())
+            self.request.sendall(self.peer_list.active_to_string().encode("utf-8"))
 
 
 
