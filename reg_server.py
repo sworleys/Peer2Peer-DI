@@ -1,52 +1,53 @@
-import socketserver
+import socketserver, re, socket, time, datetime
 import linked_list
 
+TTL_INIT = 7200
 
 class Peer(linked_list.Node):
     """
     """
 
     def __init__(self, hostname, cookie, active, ttl, port, num_active, recent_timestamp):
-        self.__hostname = hostname
-        self.__cookie = cookie
-        self.__active = active
-        self.__ttl = ttl
-        self.__port = port
-        self.__num_active = num_active
-        self.__recent_timestamp = recent_timestamp
+        self._hostname = hostname
+        self._cookie = cookie
+        self._active = active
+        self._ttl = ttl
+        self._port = port
+        self._num_active = num_active
+        self._recent_timestamp = recent_timestamp
 
     def get_hostname(self):
-        return self.__hostname
+        return self._hostname
 
     def get_cookie(self):
-        return self.__cookie
+        return self._cookie
 
     def is_active(self):
-        return self.__active
+        return self._active
 
     def get_ttl(self):
-        return self.__ttl
+        return self._ttl
 
     def get_port(self):
-        return self.__port
+        return self._port
 
     def get_num_active(self):
-        return self.__num_active
+        return self._num_active
 
     def get_recent_timestamp(self):
-        return self.__recent_timestamp
+        return self._recent_timestamp
 
     def set_active(self, flag):
-        self.__active = flag
+        self._active = flag
 
     def set_recent_timestamp(self, timestamp):
-        self.__recent_timestamp = timestamp
+        self._recent_timestamp = timestamp
 
     def inc_num_active(self):
-        self.__num_active += 1
+        self._num_active += 1
 
     def equals(self, peer):
-        return self.__cookie == peer.get_cookie()
+        return self._cookie == peer.get_cookie()
 
 
 class PeerList(linked_list.LinkedList):
@@ -77,18 +78,49 @@ class PeerList(linked_list.LinkedList):
 class RegServer(socketserver.BaseRequestHandler):
     """
     """
+    
+    peer_list = PeerList()
+    cookie_index = 0
 
     def handle(self):
-        self.data = self.request.recv(1024).strip()
-        print("{} wrote:".format(self.client_address[0]))
+        self.data = str(self.request.recv(1024).strip(), "utf-8")
         print(self.data)
-        self.request.sendall(self.data.upper())
+
+        m = re.search('Register <sp> (\d+) <cr> <lf>', self.data)
+
+        if m:
+            try:
+                hostname = socket.gethostbyaddr(self.client_address)[0]
+            except:
+                hostname = self.client_address
+            cookie = self.cookie_index
+            self.cookie_index += 1
+            active = True
+            ttl = TTL_INIT
+            port = super.socket.getpeername()[1]
+            num_active = 1
+            time = time.time()
+            recent_timestamp = datetime.datetime.fromtimestamp(time).strftime("%Y-%m-%d %H:%M:%S")
+            peer = Peer(hostname, cookie, active, ttl, port, num_active, recent_timestamp)
+            print(peer)
+
+            self.peer_list.add_head(peer)
+
+            self.request.sendall(self.peer_list.active_to_string())
+
 
 
 if __name__ == "__main__":
-    HOST, PORT = "localhost", 65423
+    try:
+        HOST, PORT = "localhost", 65423
+        
+        #peerList = PeerList()
+        #cookie_index = 0
 
-    server = socketserver.TCPServer((HOST, PORT), RegServer)
+        server = socketserver.TCPServer((HOST, PORT), RegServer)
 
-    server.serve_forever()
-   
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("Exiting...")
+        server.shutdown()
+
