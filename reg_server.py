@@ -1,7 +1,7 @@
 import socketserver, re, socket, time, datetime, threading, sys
 import linked_list
 
-TTL_INIT = 7200
+
 
 class Peer(linked_list.Node):
     """
@@ -89,10 +89,7 @@ class PeerList(linked_list.LinkedList):
     def get_peer(self, cookie):
         current = self.get_head()
         while current:
-            print(current.get_cookie())
-            print("cookie: " + cookie)
             if (current.get_cookie() == cookie):
-                print('DOOF')
                 return current
             else:
                 current = current.get_next()
@@ -114,19 +111,25 @@ class PeerList(linked_list.LinkedList):
         current = self.get_head()
         while current:
             if current.is_active():
+                print(current.get_hostname() + ":" + str(current.get_ttl()))
                 current.decrement_ttl()
 
             current = current.get_next()
 
 
+TTL_INIT = 7200
+_peer_list = PeerList()
+_cookie_index = 0
+
+
 class RegServer(socketserver.BaseRequestHandler):
     """
     """
-    
-    peer_list = PeerList()
-    cookie_index = 0
+
 
     def handle(self):
+        global _peer_list
+        global _cookie_index
         self.data = str(self.request.recv(1024).strip(), "utf-8")
 
         register = re.search('Register: (\d+)', self.data)
@@ -139,8 +142,8 @@ class RegServer(socketserver.BaseRequestHandler):
                 hostname = socket.gethostbyaddr(self.client_address[0])[0]
             except:
                 hostname = self.client_address[0]
-            cookie = self.cookie_index
-            self.cookie_index += 1
+            cookie = _cookie_index
+            _cookie_index += 1
             active = True
             ttl = TTL_INIT
             port = register.group(1)
@@ -148,16 +151,16 @@ class RegServer(socketserver.BaseRequestHandler):
             t_utc = time.time()
             recent_timestamp = datetime.datetime.fromtimestamp(t_utc).strftime("%Y-%m-%d %H:%M:%S")
             peer = Peer(hostname, cookie, active, ttl, port, num_active, recent_timestamp)
-            self.peer_list.add_head(peer)
+            _peer_list.add_head(peer)
             self.request.sendall(str(cookie).encode("utf8"))
 
         elif p_query:
-            self.request.sendall(self.peer_list.active_to_string().encode("utf-8"))
+            self.request.sendall(_peer_list.active_to_string().encode("utf-8"))
 
         elif keep_alive:
-            peer = self.peer_list.get_peer(keep_alive.group(1))
+            peer = _peer_list.get_peer(int(keep_alive.group(1)))
             if peer:
-                print(peer.get_ttl)
+                print(peer.get_ttl())
                 peer.refresh()
 
 
@@ -166,6 +169,7 @@ def ticker(e, peer_list):
     """
 
     while(e.isSet()):
+        time.sleep(1)
         peer_list.decrement_ttls()
 
 
@@ -175,16 +179,17 @@ if __name__ == "__main__":
     try:
         HOST, PORT = "localhost", 65423
         
-        #peerList = PeerList()
-        #cookie_index = 0
 
         server = socketserver.TCPServer((HOST, PORT), RegServer)
 
-        server.serve_forever()
-
         e.set()
-        t1 = threading.Thread(name='non-blocking', target=ticker, args=(e, server.peer_list))
+        print(server)
+        t1 = threading.Thread(target=ticker, args=(e, _peer_list))
+        print(t1)
         t1.start()
+
+
+        server.serve_forever()
 
 
     except(KeyboardInterrupt, SystemExit):
