@@ -45,8 +45,11 @@ class Peer(linked_list.Node):
         return self._recent_timestamp
 
 
-    def set_active(self, flag):
-        self._active = flag
+    def set_active(self):
+        self._active = True
+
+    def set_inactive(self):
+        self._active = False
 
 
     def set_recent_timestamp(self, timestamp):
@@ -65,10 +68,12 @@ class Peer(linked_list.Node):
         self._recent_timestamp = datetime.datetime.fromtimestamp(\
                 time.time()).strftime("%Y-%m-%d %H:%M:%S")
         self._ttl = TTL_INIT
+        self.set_active()
 
 
     def decrement_ttl(self):
-        self._ttl -= 1
+        if (self._ttl > 0):
+            self._ttl -= 1
 
 
 class PeerList(linked_list.LinkedList):
@@ -79,6 +84,17 @@ class PeerList(linked_list.LinkedList):
         current = self.get_head()
         while current:
             if current.get_cookie() == cookie:
+                return True
+            else:
+                current = current.get_next()
+
+        return False
+
+
+    def search_host(self, hostname, port):
+        current = self.get_head()
+        while current:
+            if (current.get_hostname() == hostname) and (current.get_port() == port):
                 return True
             else:
                 current = current.get_next()
@@ -111,8 +127,9 @@ class PeerList(linked_list.LinkedList):
         current = self.get_head()
         while current:
             if current.is_active():
-                print(current.get_hostname() + ":" + str(current.get_ttl()))
                 current.decrement_ttl()
+            if (current.get_ttl() == 0):
+                current.set_inactive()
 
             current = current.get_next()
 
@@ -135,24 +152,28 @@ class RegServer(socketserver.BaseRequestHandler):
         register = re.search('Register: (\d+)', self.data)
         p_query = re.search('PQuery', self.data)
         keep_alive = re.search('KeepAlive: (\d+)', self.data)
+        leave = re.search('Leave: (\d+)', self.data)
 
-    # Need to add check here for if already registered
         if register:
             try:
                 hostname = socket.gethostbyaddr(self.client_address[0])[0]
             except:
                 hostname = self.client_address[0]
-            cookie = _cookie_index
-            _cookie_index += 1
-            active = True
-            ttl = TTL_INIT
             port = register.group(1)
-            num_active = 1
-            t_utc = time.time()
-            recent_timestamp = datetime.datetime.fromtimestamp(t_utc).strftime("%Y-%m-%d %H:%M:%S")
-            peer = Peer(hostname, cookie, active, ttl, port, num_active, recent_timestamp)
-            _peer_list.add_head(peer)
-            self.request.sendall(str(cookie).encode("utf8"))
+
+            if _peer_list.search_host(hostname, port):
+                self.request.sendall("Already Registered".encode("utf8"))
+            else:
+                cookie = _cookie_index
+                _cookie_index += 1
+                active = True
+                ttl = TTL_INIT
+                num_active = 1
+                t_utc = time.time()
+                recent_timestamp = datetime.datetime.fromtimestamp(t_utc).strftime("%Y-%m-%d %H:%M:%S")
+                peer = Peer(hostname, cookie, active, ttl, port, num_active, recent_timestamp)
+                _peer_list.add_head(peer)
+                self.request.sendall(str(cookie).encode("utf8"))
 
         elif p_query:
             self.request.sendall(_peer_list.active_to_string().encode("utf-8"))
@@ -160,8 +181,22 @@ class RegServer(socketserver.BaseRequestHandler):
         elif keep_alive:
             peer = _peer_list.get_peer(int(keep_alive.group(1)))
             if peer:
-                print(peer.get_ttl())
                 peer.refresh()
+                self.request.sendall("Refreshed".encode("utf8"))
+            else:
+                self.request.sendall("Peer not found".encode("utf8"))
+
+        elif leave:
+            peer = _peer_list.get_peer(int(leave.group(1)))
+            if peer:
+                peer.set_inactive()
+                self.request.sendall("Left".encode("utf8"))
+            else:
+                self.request.sendall("Peer not found".encode("utf8"))
+
+        else:
+            self.request.sendall("Error in Request".encode("utf8"))
+
 
 
 def ticker(e, peer_list):
