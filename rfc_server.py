@@ -1,6 +1,28 @@
 import socketserver, re, socket, time, datetime, threading, sys
 import linked_list
 
+class RFC_Index(linked_list.Node):
+    """
+    """
+
+    def __init__(self, num, title, hostname, ttl):
+        self._num = num
+        self._title = title
+        self._hostname = hostname
+        self._ttl = ttl
+
+    def get_num(self):
+        return self._num
+
+    def get_title(self):
+        return self._title
+
+    def get_hostname(self):
+        return self._hostname
+
+    def get_ttl(self):
+        return self._ttl
+
 class RFCServer(socketserver.BaseRequestHandler):
     """
     """
@@ -49,5 +71,3 @@ class RFCServer(socketserver.BaseRequestHandler):
 
             finally:
                 sock.close()
-
-
