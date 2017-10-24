@@ -2,6 +2,10 @@ import socketserver, re, socket, time, datetime, threading, sys, os
 
 TTL_INIT = 7200
 LOCATION = ""
+HOST = ""
+PORT = 0
+REG_PORT = 65423
+REG_HOST = "localhost"
 
 # Create empty dict
 _index_dict = {}
@@ -52,7 +56,6 @@ class RFCIndex():
 class RFCServer(socketserver.BaseRequestHandler):
     """
     """
-
 
     def handle(self):
         global _peer_list
@@ -110,7 +113,6 @@ class RFCServer(socketserver.BaseRequestHandler):
                 sock.close()
             print("RFC File Sent")
 
-
 def merge(data):
     for index in data.split("\n"):
         split_index = index.split("|")
@@ -151,6 +153,7 @@ def getTitle(fil):
                 title += line.strip(' ').replace('\n','')
             else:
                 break
+    f.close()
     return title
 
 def ticker(e, index_dict):
@@ -160,13 +163,66 @@ def ticker(e, index_dict):
     while(e.isSet()):
         time.sleep(1)
         for key, value in index_dict.items():
-            value.decrement_ttl()
+            key_split = key.split("_")
+            if key_split[1] == HOSTNAME and key_split[2] == PORT:
+                value.decrement_ttl()
+
+def reg_keep_leave(command):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect((REG_HOST, REG_PORT))
+        sock.sendall(bytes(command, "utf-8"))
+
+        recieved = str(sock.recv(1024), "utf-8")
+
+    finally:
+        sock.close()
+
+def p_query(command):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect((REG_HOST, REG_PORT))
+        sock.sendall(bytes(command, "utf-8"))
+
+        # receives list of active peers
+        recieved = str(sock.recv(1024), "utf-8")
+    finally:
+        sock.close()
+
+rfc_query(hostname, port, command):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect((hostname, port))
+        sock.sendall(bytes(command, "utf-8"))
+
+        recieved = str(sock.recv(1024), "utf-8")
+        merge(recieved)
+    finally:
+        sock.close()
+
+get_rfc(hostname, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        fil = LOCATION + num + ".txt"
+
+        sock.connect((host, portname))
+        sock.sendall(bytes(command, "utf-8"))
+
+        recieved = str(sock.recv(1024), "utf-8")
+        f = open(fil, "w+")
+        f.write(recieved)
+        f.close()
+
+        key = num + "_" + hostname + "_" + port
+        if not(key in _index_dict):
+            rfc = RFCIndex(num, getTitle(fil), hostname, port, TTL_INIT)
+            _index_dict[key] = rfc
+    finally:
+        sock.close()
 
 def user_input(e):
     """
     """
-    REG_PORT = 65423
-    REG_HOST = "localhost"
 
     while(e.isSet()):
         command = input("Enter command: ")
@@ -179,65 +235,26 @@ def user_input(e):
         rfc_query = re.search('RFCQuery: ([a-z,0-9,.,-]+) (\d+)', command)
         # Numbers are hostname, port number and RFC number
         get_rfc = re.search('GetRFC: ([a-z,0-9,.,-]+) (\d+) (\d+)', command) 
-        
+ 
         if register or keep_alive or leave:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                sock.connect((REG_HOST, REG_PORT))
-                sock.sendall(bytes(command, "utf-8"))
-
-                recieved = str(sock.recv(1024), "utf-8")
-
-            finally:
-                sock.close()
+            reg_keep_leave(command)
         elif p_query:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                sock.connect((REG_HOST, REG_PORT))
-                sock.sendall(bytes(command, "utf-8"))
-
-                # receives list of active peers
-                recieved = str(sock.recv(1024), "utf-8")
-            finally:
-                sock.close()
+            p_query(command)
         elif rfc_query:
-            try:
-                hostname = rfc_query.group(1)
-                port = rfc_query.group(2)
-
-                sock.connect((hostname, port))
-                sock.sendall(bytes(command, "utf-8"))
-
-                recieved = str(sock.recv(1024), "utf-8")
-                merge(recieved)
-            finally:
-                sock.close()
+            hostname = rfc_query.group(1)
+            port = rfc_query.group(2)
+            rfc_query(hostname, port, command)
         elif get_rfc:
-            try:
-                hostname = get_rfc.group(1)
-                port = get_rfc.group(2)
-                num = get_rfc.group(3)
-                fil = LOCATION + num + ".txt"
-
-                sock.connect((host, portname))
-                sock.sendall(bytes(command, "utf-8"))
-
-                recieved = str(sock.recv(1024), "utf-8")
-                f = open(fil, "w+")
-                f.write(recieved)
-                f.close()
-
-                key = num + "_" + hostname + "_" + port
-                if not(key in _index_dict):
-                    rfc = RFCIndex(num, getTitle(fil), hostname, port, TTL_INIT)
-                    _index_dict[key] = rfc
-            finally:
-                sock.close()
+            hostname = get_rfc.group(1)
+            port = get_rfc.group(2)
+            num = get_rfc.group(3)
+            get_rfc(hostname, port, num)
 
 if __name__ == "__main__":
 
     e = threading.Event()
     try:
+        global HOST, LOCATION, PORT
         # Sets values based on user input from command-line
         HOST, LOCATION, PORT = sys.argv[1], sys.argv[2], int(sys.argv[3])
         
@@ -261,7 +278,7 @@ if __name__ == "__main__":
         print(t1)
         t1.start()
         # Thread for taking user input
-        t2 = threading.Thread(target=user_input, args=(e))
+        t2 = threading.Thread(target=user_input, args=(e,))
         print(t2)
         t2.start()
 
