@@ -13,9 +13,6 @@ __status__ = "Development"
 # Initial value of a ttl
 TTL_INIT = 7200
 
-# Global peer list
-_peer_list = PeerList()
-
 # Global value for keeping track of used cookies
 _cookie_index = 0
 
@@ -42,6 +39,7 @@ class Peer(linked_list.Node):
         self._port = port
         # number of times active
         self._num_active = num_active
+        # most recent timestamp
         self._recent_timestamp = recent_timestamp
 
 
@@ -204,6 +202,30 @@ class PeerList(linked_list.LinkedList):
             current = current.get_next()
 
 
+    def to_string(self):
+        """Loops through list and returns a string
+
+        """
+
+        peer_list_str = ""
+        current = self.get_head()
+        while current:
+            peer_list_str += current.get_hostname() + ":" "\n\t" \
+                    + str(current.get_port()) + "\n\t" \
+                    + str(current.get_cookie()) + "\n\t" \
+                    + current.is_active() + "\n\t" \
+                    + str(current.get_ttl()) + "\n\t" \
+                    + current.get_recent_timestamp() + "\n\n"
+
+            current = current.get_next()
+
+        return peer_list_str
+
+
+
+# Global peer list
+_peer_list = PeerList()
+
 
 
 class RegServer(socketserver.BaseRequestHandler):
@@ -235,8 +257,13 @@ class RegServer(socketserver.BaseRequestHandler):
                 hostname = self.client_address[0]
             port = register.group(1)
 
-            if _peer_list.search_host(hostname, port):
-                self.request.sendall("Already Registered".encode("utf8"))
+            peer = _peer_list.get_host(hostname, port)
+
+            if peer:
+                peer.inc_num_active()
+                self.request.sendall("Already Registered with cookie: " \
+                        + str(peer.get_cookie()).encode("utf8"))
+
             else:
                 #TODO: I think that when a ttl expires it should lose the cookie?
                 cookie = _cookie_index
@@ -258,6 +285,7 @@ class RegServer(socketserver.BaseRequestHandler):
             peer = _peer_list.get_peer(int(keep_alive.group(1)))
             if peer:
                 peer.refresh()
+                peer.inc_num_active()
                 self.request.sendall("Refreshed".encode("utf8"))
             else:
                 self.request.sendall("Peer not found".encode("utf8"))
@@ -284,6 +312,7 @@ def ticker(e, peer_list):
     while(e.isSet()):
         time.sleep(1)
         peer_list.decrement_ttls()
+        #if time
 
 
 if __name__ == "__main__":
