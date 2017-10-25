@@ -6,6 +6,8 @@ HOST = ""
 PORT = 0
 REG_PORT = 65423
 REG_HOST = "localhost"
+COOKIE = -1
+ttl = 0
 
 # Create empty dict
 _index_dict = {}
@@ -159,27 +161,64 @@ def getTitle(fil):
 def ticker(e, index_dict):
     """
     """
+    global ttl
 
     while(e.isSet()):
         time.sleep(1)
-        for key, value in index_dict.items():
+        if ttl > 0:
+            ttl -= 1
+        if ttl <= 10 and ttl >= 1:
+            keep_aliveB()
+        for key, value in _index_dict.items():
             key_split = key.split("_")
-            if key_split[1] == HOSTNAME and key_split[2] == PORT:
+            if not(key_split[1] == HOST and key_split[2] == PORT):
                 value.decrement_ttl()
+                if value.get_ttl() == 0:
+                    _index_dict.pop(key)
 
-def reg_keep_leave(command):
+def regis():
+    global ttl, COOKIE
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect((REG_HOST, REG_PORT))
+        ttl = TTL_INIT
+        sock.sendall(bytes("Register: " + str(PORT), "utf-8"))
+
+        COOKIE = str(sock.recv(1024), "utf-8")
+        print("Peer recieved.")
+    finally:
+        sock.close()
+
+def keep_aliveB():
+    global ttl
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    command = "KeepAlive: " + str(COOKIE)
     try:
         sock.connect((REG_HOST, REG_PORT))
         sock.sendall(bytes(command, "utf-8"))
 
         recieved = str(sock.recv(1024), "utf-8")
-
+        print(recieved)
     finally:
         sock.close()
+    ttl = TTL_INIT
 
-def p_query(command):
+def leaveB():
+    global ttl
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect((REG_HOST, REG_PORT))
+        sock.sendall(bytes("Leave: " + str(PORT), "utf-8"))
+
+        recieved = str(sock.recv(1024), "utf-8")
+        print(recieved)
+    finally:
+        sock.close()
+    ttl = 0
+
+def p_query():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    recieved = ""
     try:
         sock.connect((REG_HOST, REG_PORT))
         sock.sendall(bytes(command, "utf-8"))
@@ -189,18 +228,24 @@ def p_query(command):
     finally:
         sock.close()
 
-rfc_query(hostname, port, command):
+    print(recieved)
+    data = recieved.split("\n")
+    return data
+
+def rfc_query(hostname, port):
+    global PORT
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.connect((hostname, port))
-        sock.sendall(bytes(command, "utf-8"))
+        sock.sendall(bytes("RFCQuery: " + PORT, "utf-8"))
 
         recieved = str(sock.recv(1024), "utf-8")
         merge(recieved)
     finally:
         sock.close()
 
-get_rfc(hostname, port):
+def get_rfc(hostname, port):
+    global LOCATIOn
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         fil = LOCATION + num + ".txt"
@@ -220,6 +265,9 @@ get_rfc(hostname, port):
     finally:
         sock.close()
 
+def search(num):
+    return {k:v for k,v in _index_dict.items() if k.startswith(num)}
+
 def user_input(e):
     """
     """
@@ -227,34 +275,65 @@ def user_input(e):
     while(e.isSet()):
         command = input("Enter command: ")
 
-        register = re.search('Register: (\d+)', command)
+        register = re.search('Register', command)
         p_query = re.search('PQuery', command)
-        keep_alive = re.search('KeepAlive: (\d+)', command)
-        leave = re.search('Leave: (\d+)', command)
+        keep_alive = re.search('KeepAlive', command)
+        leave = re.search('Leave', command)
         # Numbers are hostname and port number
         rfc_query = re.search('RFCQuery: ([a-z,0-9,.,-]+) (\d+)', command)
         # Numbers are hostname, port number and RFC number
         get_rfc = re.search('GetRFC: ([a-z,0-9,.,-]+) (\d+) (\d+)', command) 
- 
-        if register or keep_alive or leave:
-            reg_keep_leave(command)
+        find = re.search('Search: (\d+)', command)
+        if register:
+            regis()
+        elif keep_alive:
+            keep_aliveB()
+        elif leave:
+            leaveB()
         elif p_query:
-            p_query(command)
+            p_query()
         elif rfc_query:
             hostname = rfc_query.group(1)
             port = rfc_query.group(2)
-            rfc_query(hostname, port, command)
+            data = rfc_query(hostname, port)
+            print(data)
         elif get_rfc:
             hostname = get_rfc.group(1)
             port = get_rfc.group(2)
             num = get_rfc.group(3)
             get_rfc(hostname, port, num)
+        elif find:
+            found = False
+            num = find.group(1)
+            temp_index = search(num)
+            if not temp_index:
+                data = p_query('PQuery')
+                for d in data:
+                    peer = d.split(":")
+                    hostname = peer[0]
+                    port = peer[1]
+                    rfc_query(hostname, port)
+                    temp_index = search(num)
+                    if temp_index:
+                        get_rfc(temp_index[0].get_hostname, temp_index.get_port, num)
+                        found = True
+                        break
+                if not found:
+                    print("RFC not in P2P network.\n")
+            else:
+                if (num + "_" + hostname + "_" + port) in temp_index:
+                    print("Already in this peer.\n")
+                else:
+                    get_rfc(temp_index.get_hostname, temp_index.get_port, num)
+                    found = True
+            if found:
+                print("RFC downloaded.")
+
 
 if __name__ == "__main__":
 
     e = threading.Event()
     try:
-        global HOST, LOCATION, PORT
         # Sets values based on user input from command-line
         HOST, LOCATION, PORT = sys.argv[1], sys.argv[2], int(sys.argv[3])
         
@@ -269,8 +348,8 @@ if __name__ == "__main__":
         for root, dirs, filenames in os.walk(LOCATION):
             for f in filenames:
                 rfc_num = f[:-4] # removes .txt part of filename 
-                rfc = RFCIndex(rfc_num + "_" + HOST, getTitle(LOCATION + f), HOST, PORT, TTL_INIT)
-                _index_dict[rfc_num] = rfc
+                rfc = RFCIndex(rfc_num, getTitle(LOCATION + f), HOST, PORT, TTL_INIT)
+                _index_dict[str(rfc_num) + "_" + HOST + "_" + str(PORT)] = rfc
 
         e.set()
         # Thread for decrementing TTL for RFC indexes
