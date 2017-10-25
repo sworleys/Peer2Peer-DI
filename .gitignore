@@ -109,6 +109,7 @@ pip-selfcheck.json
 
 # rfcs
 rfcs/
+peers/
 
 P0/
 P1/
