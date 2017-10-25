@@ -257,12 +257,13 @@ class RegServer(socketserver.BaseRequestHandler):
                 hostname = self.client_address[0]
             port = register.group(1)
 
-            peer = _peer_list.get_host(hostname, port)
+            #peer = _peer_list.get_host(hostname, port)
 
-            if peer:
-                peer.inc_num_active()
-                self.request.sendall("Already Registered with cookie: " \
-                        + str(peer.get_cookie()).encode("utf8"))
+            if _peer_list.search_host(hostname, port):
+                #peer.inc_num_active()
+                self.request.sendall("Already Registered".encode("utf8"))
+                #self.request.sendall("Already Registered with cookie: " \
+                #        + str(peer.get_cookie()).encode("utf8"))
 
             else:
                 #TODO: I think that when a ttl expires it should lose the cookie?
