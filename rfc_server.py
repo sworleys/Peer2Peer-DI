@@ -92,12 +92,13 @@ class RFCServer(socketserver.BaseRequestHandler):
 
             size = len(data)
 
+            self.request.sendall(str(size).encode("utf8"))
+
             while size > 0:
+                print("RFC QUERY")
                 size -= LENGTH
                 self.request.sendall((data[:1024]).encode("utf8"))
-                data = data[1024:]
-
-            self.request.sendall(("Finished: " + str(REG_PORT)).encode("utf8"))
+                data = data[1024:]            
             
             print("\nRFC Query Sent\n\nEnter command: ")
 
@@ -114,12 +115,13 @@ class RFCServer(socketserver.BaseRequestHandler):
             data = open(LOCATION + rfc_num + '.txt', 'r').read()
             size = len(data)
 
+            self.request.sendall(str(size).encode("utf8"))
+
             while size > 0:
+                print("GET RFC")
                 size -= LENGTH
                 self.request.sendall((data[:1024]).encode("utf8"))
                 data = data[1024:]
-            
-            self.request.sendall(("Finished: " + str(REG_PORT)).encode("utf8"))
 
             print("\nRFC File Sent\n\nEnter command: ")
 
@@ -250,10 +252,13 @@ def rfc_queri(hostname, port):
         sock.connect((hostname, int(port)))
         sock.sendall(bytes("RFCQuery: " + str(PORT), "utf-8"))
 
-        while temp != "Finished: " + str(REG_PORT):
+        size = int(str(sock.recv(1024), "utf-8"))
+
+        while size > 0:
+            print("RFC QUERI")
             temp = str(sock.recv(1024), "utf-8")
-            if temp != "Finished: " + str(REG_PORT):
-                recieved += temp
+            recieved += temp
+            size -= 1024
 
         merge(recieved)
     finally:
@@ -272,10 +277,17 @@ def git_rfc(hostname, port, num):
         sock.connect((hostname, int(port)))
         sock.sendall(bytes("GetRFC: " + str(port) + " " + str(num), "utf-8"))
 
-        while temp != "Finished: " + str(REG_PORT):
+        t = str(sock.recv(1024), "utf-8")
+        print("T:" + t)
+        size = int(t)
+        while size > 0:
             temp = str(sock.recv(1024), "utf-8")
-            if temp != "Finished: " + str(REG_PORT):
-                recieved += temp
+            print("GIT RFC: " + str(num))
+            print("temp: " + temp[:6])
+            print("hostname:" + hostname)
+            print("port:" + str(port))
+            recieved += temp
+            size -= 1024
         f = open(fil, "w+")
         f.write(recieved)
         f.close()
@@ -339,6 +351,7 @@ def user_input(e):
     """
 
     while(e.isSet()):
+        print("USER INPUT")
         command = input("Enter command: ")
 
         register = re.search('Register', command)
@@ -395,6 +408,13 @@ if __name__ == "__main__":
         sinT.close()
         totT.close()
 
+        # Loops through all files to add them to the dictionary by RFC number
+        for root, dirs, filenames in os.walk(LOCATION):
+            for f in filenames:
+                rfc_num = f[:-4] # removes .txt part of filename 
+                rfc = RFCIndex(rfc_num, getTitle(LOCATION + f), HOST, PORT, TTL_INIT)
+                _index_dict[str(rfc_num) + "_" + HOST + "_" + str(PORT)] = rfc
+
         server = ThreadedRFCServer((HOST, PORT), RFCServer)
         print(server)
 
@@ -402,13 +422,6 @@ if __name__ == "__main__":
         # Exit the server thread when the main thread terminates
         server_thread.daemon = True
         server_thread.start()
-
-        # Loops through all files to add them to the dictionary by RFC number
-        for root, dirs, filenames in os.walk(LOCATION):
-            for f in filenames:
-                rfc_num = f[:-4] # removes .txt part of filename 
-                rfc = RFCIndex(rfc_num, getTitle(LOCATION + f), HOST, PORT, TTL_INIT)
-                _index_dict[str(rfc_num) + "_" + HOST + "_" + str(PORT)] = rfc
 
         e.set()
         # Thread for decrementing TTL for RFC indexes
