@@ -432,11 +432,14 @@ if __name__ == "__main__":
         if(LOCATION[-1] != "/"):
             LOCATION += "/"
 
-        header_text = "t1"
+        header_text = "t2"
         folder_name = LOCATION[LOCATION[:-1].rfind("/") + 1:-1]
 
-        sinT_name = LOCATION + header_text + "_" + folder_name + "_st.csv"
-        totT_name = LOCATION + header_text + "_" + folder_name + "_tt.csv"
+        # sinT_name = LOCATION + header_text + "_" + folder_name + "_st.csv"
+        # totT_name = LOCATION + header_text + "_" + folder_name + "_tt.csv"
+
+        sinT_name = header_text + "_" + folder_name + "_st.csv"
+        totT_name = header_text + "_" + folder_name + "_tt.csv"
 
         sinT = open(sinT_name, "w+")
         totT = open(totT_name, "w+")
