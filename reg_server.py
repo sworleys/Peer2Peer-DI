@@ -413,8 +413,15 @@ if __name__ == "__main__":
     e = threading.Event()
 
     try:
-        HOST, PORT = "localhost", 65423
-        
+
+        if len(sys.argv) == 2:
+            HOST = sys.argv[1]
+        else:
+            HOST = "localhost"
+
+        PORT = 65423
+
+        print(HOST + ":" + str(PORT))
 
         server = socketserver.TCPServer((HOST, PORT), RegServer)
 
