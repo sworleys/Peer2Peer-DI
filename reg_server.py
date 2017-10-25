@@ -1,4 +1,5 @@
-import socketserver, re, socket, time, datetime, threading, sys
+import socketserver, re, socket, time, datetime, threading, sys, queue
+from random import randint
 import linked_list
 
 
@@ -10,11 +11,19 @@ __email__ = "sworley1995@gmail.com"
 __status__ = "Development"
 
 
+
 # Initial value of a ttl
 TTL_INIT = 7200
 
+# Seconds in a day
+DAY_SECONDS = 86400
+
+# Total number of days to track
+DAY_TOTAL = 30
+
 # Global value for keeping track of used cookies
 _cookie_index = 0
+
 
 
 
@@ -41,6 +50,8 @@ class Peer(linked_list.Node):
         self._num_active = num_active
         # most recent timestamp
         self._recent_timestamp = recent_timestamp
+        # Queue for keeping track of last thirty days active
+        self._day_q = queue.Queue(DAY_TOTAL)
 
 
     def get_hostname(self):
@@ -71,6 +82,43 @@ class Peer(linked_list.Node):
         return self._recent_timestamp
 
 
+    def get_day_q(self):
+        return self._day_q
+
+
+    def get_total_active(self):
+        """Sums total active of last 30 days
+        """
+
+        total = 0
+        tmp_q = queue.Queue(DAY_TOTAL)
+
+        for i in range(0, self._day_q.qsize()):
+            num_active = self._day_q.get()
+            total += num_active
+            tmp_q.put(num_active)
+
+        self._day_q = tmp_q
+        return total
+
+
+    def update_day_q(self):
+        """
+        Adds number of times active from that day to queue
+        that keeps track of it for 30 days
+
+        """
+
+        if (self._day_q.qsize() == DAY_TOTAL):
+            self._day_q.get()
+            self._day_q.put(self._num_active)
+        else:
+            self._day_q.put(self._num_active)
+
+
+        self._num_active = 0
+
+
     def set_active(self):
         self._active = True
 
@@ -80,6 +128,10 @@ class Peer(linked_list.Node):
 
     def set_recent_timestamp(self, timestamp):
         self._recent_timestamp = timestamp
+
+
+    def set_num_active(self, num):
+        self._num_active = num
 
 
     def inc_num_active(self):
@@ -169,6 +221,21 @@ class PeerList(linked_list.LinkedList):
                 current = current.get_next()
 
 
+    def get_host(self, hostname, port):
+        """Gets the Peer in the list based on hostname
+
+        """
+
+        current = self.get_head()
+        while current:
+            if (current.get_hostname() == hostname) and (current.get_port() == port):
+                return current
+            else:
+                current = current.get_next()
+
+        return current
+
+
     def active_to_string(self):
         """Loops through list and returns a string of every
         Peer marked active along with there port number
@@ -202,6 +269,17 @@ class PeerList(linked_list.LinkedList):
             current = current.get_next()
 
 
+    def update_active_day(self):
+        """Loops through list and updates the 30 day queue
+
+        """
+
+        current = self.get_head()
+        while current:
+            current.update_day_q()
+            current = current.get_next()
+
+
     def to_string(self):
         """Loops through list and returns a string
 
@@ -213,13 +291,17 @@ class PeerList(linked_list.LinkedList):
             peer_list_str += current.get_hostname() + ":" "\n\t" \
                     + str(current.get_port()) + "\n\t" \
                     + str(current.get_cookie()) + "\n\t" \
-                    + current.is_active() + "\n\t" \
+                    + str(current.is_active()) + "\n\t" \
                     + str(current.get_ttl()) + "\n\t" \
-                    + current.get_recent_timestamp() + "\n\n"
+                    + current.get_recent_timestamp() + "\n\t" \
+                    + "num:   " + str(current.get_num_active()) + "\n\t" \
+                    + "size:  " + str(current.get_day_q().qsize()) + "\n\t" \
+                    + "total: " + str(current.get_total_active()) + "\n\n"
 
             current = current.get_next()
 
         return peer_list_str
+
 
 
 
@@ -242,14 +324,12 @@ class RegServer(socketserver.BaseRequestHandler):
         global _peer_list
         global _cookie_index
         self.data = str(self.request.recv(1024).strip(), "utf-8")
-
+        print(self.data)
         register = re.search('Register: (\d+)', self.data)
         p_query = re.search('PQuery', self.data)
         keep_alive = re.search('KeepAlive: (\d+)', self.data)
         leave = re.search('Leave: (\d+)', self.data)
 
-        #TODO: Keep track in num_active the number of times it has been active in the last 30 days
-        #TODO: Honestly, should add toString method to test all this on close
         if register:
             try:
                 hostname = socket.gethostbyaddr(self.client_address[0])[0]
@@ -257,16 +337,16 @@ class RegServer(socketserver.BaseRequestHandler):
                 hostname = self.client_address[0]
             port = register.group(1)
 
-            #peer = _peer_list.get_host(hostname, port)
+            peer = _peer_list.get_host(hostname, port)
 
-            if _peer_list.search_host(hostname, port):
-                #peer.inc_num_active()
-                self.request.sendall("Already Registered".encode("utf8"))
-                #self.request.sendall("Already Registered with cookie: " \
-                #        + str(peer.get_cookie()).encode("utf8"))
+            if peer:
+                peer.set_active()
+                peer.inc_num_active()
+                self.request.sendall(("Already Registered with cookie: " \
+                        + str(peer.get_cookie())).encode("utf8"))
 
             else:
-                #TODO: I think that when a ttl expires it should lose the cookie?
+                # TODO: I think that when a ttl expires it should lose the cookie?
                 cookie = _cookie_index
                 _cookie_index += 1
                 active = True
@@ -278,7 +358,6 @@ class RegServer(socketserver.BaseRequestHandler):
                 _peer_list.add_head(peer)
                 self.request.sendall(str(cookie).encode("utf8"))
 
-        #TODO: Add ttl refresh for query
         elif p_query:
             self.request.sendall(_peer_list.active_to_string().encode("utf-8"))
 
@@ -310,10 +389,23 @@ def ticker(e, peer_list):
 
     """
 
+    # Second counter
+    total_sec = 0
+
     while(e.isSet()):
         time.sleep(1)
+        total_sec += 1
         peer_list.decrement_ttls()
-        #if time
+
+        # Every day run the 30 day
+        if (total_sec == DAY_SECONDS):
+            # Debugger
+            peer = peer_list.get_head()
+            if peer:
+                peer.set_num_active(randint(0, 100))
+            peer_list.update_active_day()
+            total_sec = 0
+
 
 
 if __name__ == "__main__":
@@ -337,7 +429,7 @@ if __name__ == "__main__":
 
 
     except(KeyboardInterrupt, SystemExit):
-        print("Exiting...")
+        print("Exiting...\n\n")
         e.clear()
         server.shutdown()
         sys.exit()
