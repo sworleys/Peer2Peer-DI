@@ -1,4 +1,4 @@
-import socketserver, re, socket, time, datetime, threading, sys, os
+import socketserver, re, socket, time, datetime, threading, sys, os, time
 
 TTL_INIT = 7200
 LOCATION = ""
@@ -8,6 +8,8 @@ REG_PORT = 65423
 REG_HOST = "localhost"
 COOKIE = -1
 ttl = 0
+total_time = 0
+file_counter = 0
 
 # Create empty dict
 _index_dict = {}
@@ -28,7 +30,7 @@ class RFCIndex():
         self._title = title
         self._hostname = hostname
         self._port = port
-        self._ttl = ttl
+        self._ttl = int(ttl)
 
     def get_num(self):
         return self._num
@@ -52,7 +54,7 @@ class RFCIndex():
         self._ttl = TTL_INIT
 
     def __str__(self):
-        return str(self._num) + "|" + self._title + "|" + self._hostname + "|" + str(self._ttl)
+        return str(self._num) + "|" + self._title + "|" + self._hostname + "|" + str(self._port) + "|" + str(self._ttl)
 
 
 class RFCServer(socketserver.BaseRequestHandler):
@@ -62,6 +64,7 @@ class RFCServer(socketserver.BaseRequestHandler):
     def handle(self):
         global _peer_list
         global _cookie_index
+        LENGTH = 1024
         self.data = str(self.request.recv(1024).strip(), "utf-8")
         # Number is port number
         rfc_query = re.search('RFCQuery: (\d+)', self.data)
@@ -70,31 +73,23 @@ class RFCServer(socketserver.BaseRequestHandler):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
         # A peer requests the RFC index from a remote peer.
         if rfc_query:
-            print("RFC Query Received")
+            print("\nRFC Query Request")
             try:
                 hostname = socket.gethostbyaddr(self.client_address[0])[0]
             except:
                 hostname = self.client_address[0]
             port = rfc_query.group(1)
             
-            try:
-                sock.connect((hostname, port))
-                # Converts dict to string separated by newline delimiter
-                data = ''
-                for key, value in _index_dict.items():
-                    data += str(value) + '\n'  
-                # Sends over string 
-                sock.sendall(bytes(data, "utf-8"))
-
-                recieved = str(sock.recv(1024), "utf-8")
-
-            finally:
-                sock.close()
-            print("RFC Query Sent")
+            data = ''
+            for key, value in _index_dict.items():
+                data += str(value) + '\n'  
+            data = data[:-1]
+            self.request.sendall(data.encode("utf8"))
+            print("\nRFC Query Sent\n\nEnter command: ")
 
         # A peer requests to download a specific RFC document from a remote peer.
         elif get_rfc:
-            print("RFC File Request")
+            print("\nRFC File Request")
             try:
                 hostname = socket.gethostbyaddr(self.client_address[0])[0]
             except:
@@ -102,18 +97,17 @@ class RFCServer(socketserver.BaseRequestHandler):
             port = get_rfc.group(1)
             rfc_num = get_rfc.group(2)
 
-            try:
-                sock.connect((hostname, port))
-                # Converts file to string
-                data = open(LOCATION + rfc_num + '.txt', 'r').read()
-                # Sends over string
-                sock.sendall(bytes(data, "utf-8"))
+            data = open(LOCATION + rfc_num + '.txt', 'r').read()
+            size = len(data)
 
-                recieved = str(sock.recv(1024), "utf-8")
+            while size > 0:
+                size -= LENGTH
+                self.request.sendall((data[:1024]).encode("utf8"))
+                data = data[1024:]
+            
+            self.request.sendall(("Finished: " + str(REG_PORT)).encode("utf8"))
 
-            finally:
-                sock.close()
-            print("RFC File Sent")
+            print("\nRFC File Sent\n\nEnter command: ")
 
 def merge(data):
     for index in data.split("\n"):
@@ -128,7 +122,7 @@ def merge(data):
         key = num + "_" + hostname + "_" + port
 
         if not(key in _index_dict):
-            rfc = RFCIndex(num, title, hostname, ttl)
+            rfc = RFCIndex(num, title, hostname, port, ttl)
             _index_dict[key] = rfc 
 
 """
@@ -177,7 +171,7 @@ def ticker(e, index_dict):
                     _index_dict.pop(key)
 
 def regis():
-    global ttl, COOKIE
+    global ttl, COOKIE, REG_HOST, REG_PORT
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.connect((REG_HOST, REG_PORT))
@@ -186,6 +180,7 @@ def regis():
 
         COOKIE = str(sock.recv(1024), "utf-8")
         print("Peer recieved.")
+        print("Cookie: " + COOKIE)
     finally:
         sock.close()
 
@@ -208,7 +203,7 @@ def leaveB():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.connect((REG_HOST, REG_PORT))
-        sock.sendall(bytes("Leave: " + str(PORT), "utf-8"))
+        sock.sendall(bytes("Leave: " + str(COOKIE), "utf-8"))
 
         recieved = str(sock.recv(1024), "utf-8")
         print(recieved)
@@ -216,12 +211,12 @@ def leaveB():
         sock.close()
     ttl = 0
 
-def p_query():
+def p_queri():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     recieved = ""
     try:
         sock.connect((REG_HOST, REG_PORT))
-        sock.sendall(bytes(command, "utf-8"))
+        sock.sendall(bytes("PQuery", "utf-8"))
 
         # receives list of active peers
         recieved = str(sock.recv(1024), "utf-8")
@@ -232,41 +227,89 @@ def p_query():
     data = recieved.split("\n")
     return data
 
-def rfc_query(hostname, port):
+def rfc_queri(hostname, port):
     global PORT
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        sock.connect((hostname, port))
-        sock.sendall(bytes("RFCQuery: " + PORT, "utf-8"))
+        sock.connect((hostname, int(port)))
+        sock.sendall(bytes("RFCQuery: " + str(PORT), "utf-8"))
 
         recieved = str(sock.recv(1024), "utf-8")
         merge(recieved)
     finally:
         sock.close()
 
-def get_rfc(hostname, port):
-    global LOCATIOn
+def git_rfc(hostname, port, num):
+    
+    start_time = time.time()
+    global LOCATION, file_counter, total_time
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         fil = LOCATION + num + ".txt"
+        recieved = ""
+        temp = ""
 
-        sock.connect((host, portname))
-        sock.sendall(bytes(command, "utf-8"))
+        sock.connect((hostname, int(port)))
+        sock.sendall(bytes("GetRFC: " + str(port) + " " + str(num), "utf-8"))
 
-        recieved = str(sock.recv(1024), "utf-8")
+        while temp != "Finished: " + str(REG_PORT):
+            temp = str(sock.recv(1024), "utf-8")
+            if temp != "Finished: " + str(REG_PORT):
+                recieved += temp
         f = open(fil, "w+")
         f.write(recieved)
         f.close()
 
-        key = num + "_" + hostname + "_" + port
+        key = str(num) + "_" + hostname + "_" + str(port)
         if not(key in _index_dict):
-            rfc = RFCIndex(num, getTitle(fil), hostname, port, TTL_INIT)
+            rfc = RFCIndex(num, getTitle(fil), hostname, int(port), TTL_INIT)
             _index_dict[key] = rfc
     finally:
         sock.close()
 
+    print("RFC file downloaded.")
+    diff = time.time() - start_time
+    file_counter += 1
+    sinT = open(LOCATION + "singleTimes.csv", "a")
+    totT = open(LOCATION + "totalTimes.csv", "a")
+
+    sinT.write(str(num) + "," + str(diff))
+
+    total_time += diff
+
+    totT.write(str(file_counter) + "," + str(total_time))
+
+    sinT.close()
+    totT.close()
+
 def search(num):
-    return {k:v for k,v in _index_dict.items() if k.startswith(num)}
+    return {v for k,v in _index_dict.items() if k.startswith(num)}
+
+def look(num):
+    found = False
+    temp_index = search(num)
+    if not temp_index:
+        data = p_queri()
+        for d in data:
+            peer = d.split(":")
+            hostname = peer[0]
+            port = peer[1]
+            rfc_queri(hostname, port)
+            temp_index = search(num)
+            
+            if temp_index:
+                first_temp_index = next(iter(temp_index))
+                git_rfc(first_temp_index.get_hostname(), first_temp_index.get_port(), num)
+                found = True
+                break
+        if not found:
+            print("RFC not in P2P network.\n")
+    else:
+        if (num + "_" + HOST + "_" + str(PORT)) in temp_index:
+            print("Already in this peer.\n\n")
+        else:
+            first_temp_index = next(iter(temp_index))
+            git_rfc(first_temp_index.get_hostname(), first_temp_index.get_port(), num)
 
 def user_input(e):
     """
@@ -280,10 +323,11 @@ def user_input(e):
         keep_alive = re.search('KeepAlive', command)
         leave = re.search('Leave', command)
         # Numbers are hostname and port number
-        rfc_query = re.search('RFCQuery: ([a-z,0-9,.,-]+) (\d+)', command)
+        rfc_query = re.search('RFCQuery: (.+) (\d+)', command)
         # Numbers are hostname, port number and RFC number
-        get_rfc = re.search('GetRFC: ([a-z,0-9,.,-]+) (\d+) (\d+)', command) 
+        get_rfc = re.search('GetRFC: (.+) (\d+) (\d+)', command) 
         find = re.search('Search: (\d+)', command)
+        find_many = re.search('Search: (\d+)-(\d+)', command)
         if register:
             regis()
         elif keep_alive:
@@ -291,44 +335,24 @@ def user_input(e):
         elif leave:
             leaveB()
         elif p_query:
-            p_query()
+            p_queri()
         elif rfc_query:
             hostname = rfc_query.group(1)
             port = rfc_query.group(2)
-            data = rfc_query(hostname, port)
-            print(data)
+            data = rfc_queri(hostname, port)
         elif get_rfc:
             hostname = get_rfc.group(1)
             port = get_rfc.group(2)
             num = get_rfc.group(3)
-            get_rfc(hostname, port, num)
+            git_rfc(hostname, port, num)
         elif find:
-            found = False
             num = find.group(1)
-            temp_index = search(num)
-            if not temp_index:
-                data = p_query('PQuery')
-                for d in data:
-                    peer = d.split(":")
-                    hostname = peer[0]
-                    port = peer[1]
-                    rfc_query(hostname, port)
-                    temp_index = search(num)
-                    if temp_index:
-                        get_rfc(temp_index[0].get_hostname, temp_index.get_port, num)
-                        found = True
-                        break
-                if not found:
-                    print("RFC not in P2P network.\n")
-            else:
-                if (num + "_" + hostname + "_" + port) in temp_index:
-                    print("Already in this peer.\n")
-                else:
-                    get_rfc(temp_index.get_hostname, temp_index.get_port, num)
-                    found = True
-            if found:
-                print("RFC downloaded.")
-
+            look(num)
+        elif find_many:
+            start = find.group(1)
+            end = find.group(2)
+            for x in range(start, end):
+                look(x)
 
 if __name__ == "__main__":
 
@@ -340,6 +364,12 @@ if __name__ == "__main__":
         # Error check in case user didn't include / at end of location
         if(LOCATION[-1] != "/"):
             LOCATION += "/"
+
+        sinT = open(LOCATION + "singleTimes.csv", "w+")
+        totT = open(LOCATION + "totalTimes.csv", "w+")
+
+        sinT.close()
+        totT.close()
 
         server = socketserver.TCPServer((HOST, PORT), RFCServer)
         print(server)
@@ -354,11 +384,9 @@ if __name__ == "__main__":
         e.set()
         # Thread for decrementing TTL for RFC indexes
         t1 = threading.Thread(target=ticker, args=(e, _index_dict))
-        print(t1)
         t1.start()
         # Thread for taking user input
         t2 = threading.Thread(target=user_input, args=(e,))
-        print(t2)
         t2.start()
 
         server.serve_forever()
