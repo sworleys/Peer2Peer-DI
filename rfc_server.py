@@ -365,7 +365,7 @@ def user_input(e):
         elif leave:
             leaveB()
         elif p_query:
-            p_queri()
+            print(str(p_queri()))
         elif rfc_query:
             hostname = rfc_query.group(1)
             port = rfc_query.group(2)
