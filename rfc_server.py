@@ -95,7 +95,6 @@ class RFCServer(socketserver.BaseRequestHandler):
             self.request.sendall(str(size).encode("utf8"))
 
             while size > 0:
-                print("RFC QUERY")
                 size -= LENGTH
                 self.request.sendall((data[:1024]).encode("utf8"))
                 data = data[1024:]            
@@ -118,7 +117,6 @@ class RFCServer(socketserver.BaseRequestHandler):
             self.request.sendall(str(size).encode("utf8"))
 
             while size > 0:
-                print("GET RFC")
                 size -= LENGTH
                 self.request.sendall((data[:1024]).encode("utf8"))
                 data = data[1024:]
@@ -255,7 +253,6 @@ def rfc_queri(hostname, port):
         size = int(str(sock.recv(1024), "utf-8"))
 
         while size > 0:
-            print("RFC QUERI")
             temp = str(sock.recv(1024), "utf-8")
             recieved += temp
             size -= 1024
@@ -282,10 +279,6 @@ def git_rfc(hostname, port, num):
         size = int(t)
         while size > 0:
             temp = str(sock.recv(1024), "utf-8")
-            print("GIT RFC: " + str(num))
-            print("temp: " + temp[:6])
-            print("hostname:" + hostname)
-            print("port:" + str(port))
             recieved += temp
             size -= 1024
         f = open(fil, "w+")
@@ -353,7 +346,6 @@ def user_input(e):
     """
 
     while(e.isSet()):
-        print("USER INPUT")
         command = input("Enter command: ")
 
         register = re.search('Register', command)
