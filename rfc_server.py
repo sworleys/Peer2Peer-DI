@@ -11,6 +11,8 @@ COOKIE = -1
 ttl = 0
 total_time = 0
 file_counter = 0
+sinT_name = ""
+totT_name = ""
 
 # Create empty dict
 _index_dict = {}
@@ -112,8 +114,8 @@ class RFCServer(socketserver.BaseRequestHandler):
             rfc_num = get_rfc.group(2)
 
             
-            if os.path.isfile(LOCATION + rfc_num + '.txt'):
-                data = open(LOCATION + rfc_num + '.txt', 'r').read()
+            if os.path.isfile(LOCATION + str(rfc_num) + '.txt'):
+                data = open(LOCATION + str(rfc_num) + '.txt', 'r').read()
 
                 size = len(data)
 
@@ -124,10 +126,10 @@ class RFCServer(socketserver.BaseRequestHandler):
                     self.request.sendall((data[:1024]).encode("utf8"))
                     data = data[1024:]
 
-                print("\nRFC File Sent\n\nEnter command: ")
+                print("\nRFC File Sent: " + str(rfc_num) + "\n\nEnter command: ")
             else: 
                 self.request.sendall("RFC File Not Found".encode("utf8"))
-                print("\nRFC File Not Found\n\nEnter command: ")
+                print("\nRFC File Not Found: " + str(rfc_num) + "\n\nEnter command: ")
             
 
 def merge(data):
@@ -297,7 +299,7 @@ def git_rfc(hostname, port, num):
         not_found = re.search("RFC File Not Found", first_rec)
 
         if not_found:
-            print("RFC File Not Found")
+            print("RFC File Not Found: " + str(num))
             sock.close()
             return
 
@@ -322,11 +324,11 @@ def git_rfc(hostname, port, num):
     finally:
         sock.close()
 
-    print("RFC file downloaded.")
+    print("RFC file downloaded: " + str(num))
     diff = time.time() - start_time
     file_counter += 1
-    sinT = open(LOCATION + "singleTimes.csv", "a")
-    totT = open(LOCATION + "totalTimes.csv", "a")
+    sinT = open(sinT_name, "a")
+    totT = open(totT_name, "a")
 
     sinT.write(str(num) + "," + str(diff) + "\n")
 
@@ -364,11 +366,11 @@ def look(num):
                 found = True
                 break
         if not found:
-            print("RFC not in P2P network.\n")
+            print("RFC not in P2P network: " + str(num) + "\n")
     else:
         first_temp_index = next(iter(temp_index))
         if HOST == first_temp_index.get_hostname() and PORT == first_temp_index.get_port():
-            print("Already in this peer.\n\n")
+            print("Already in this peer: " + str(num) + "\n\n")
         else:
             first_temp_index = next(iter(temp_index))
             git_rfc(first_temp_index.get_hostname(), first_temp_index.get_port(), num)
@@ -414,7 +416,7 @@ def user_input(e):
             start = find_many.group(1)
             end = find_many.group(2)
             for x in range(int(start), int(end) + 1):
-                print("x:" + str(x))
+                print("File:" + str(x))
                 look(x)
         else:
             print("Invalid command.\n")
@@ -430,8 +432,14 @@ if __name__ == "__main__":
         if(LOCATION[-1] != "/"):
             LOCATION += "/"
 
-        sinT = open(LOCATION + "singleTimes.csv", "w+")
-        totT = open(LOCATION + "totalTimes.csv", "w+")
+        header_text = "t1"
+        folder_name = LOCATION[LOCATION[:-1].rfind("/") + 1:-1]
+
+        sinT_name = LOCATION + header_text + "_" + folder_name + "_st.csv"
+        totT_name = LOCATION + header_text + "_" + folder_name + "_tt.csv"
+
+        sinT = open(sinT_name, "w+")
+        totT = open(totT_name, "w+")
 
         sinT.close()
         totT.close()
