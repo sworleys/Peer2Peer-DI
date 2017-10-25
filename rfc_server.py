@@ -305,11 +305,11 @@ def git_rfc(hostname, port, num):
     sinT = open(LOCATION + "singleTimes.csv", "a")
     totT = open(LOCATION + "totalTimes.csv", "a")
 
-    sinT.write(str(num) + "," + str(diff))
+    sinT.write(str(num) + "," + str(diff) + "\n")
 
     total_time += diff
 
-    totT.write(str(file_counter) + "," + str(total_time))
+    totT.write(str(file_counter) + "," + str(total_time) + "\n")
 
     sinT.close()
     totT.close()
@@ -322,6 +322,7 @@ def look(num):
     found = False
     temp_index = search(num)
     if not temp_index:
+
         data = p_queri()
         for d in data:
             peer = d.split(":")
@@ -340,7 +341,8 @@ def look(num):
         if not found:
             print("RFC not in P2P network.\n")
     else:
-        if (str(num) + "_" + HOST + "_" + str(PORT)) in temp_index:
+        first_temp_index = next(iter(temp_index))
+        if HOST == first_temp_index.get_hostname() and PORT == first_temp_index.get_port():
             print("Already in this peer.\n\n")
         else:
             first_temp_index = next(iter(temp_index))
@@ -387,7 +389,7 @@ def user_input(e):
         elif find_many:
             start = find_many.group(1)
             end = find_many.group(2)
-            for x in range(int(start), int(end)):
+            for x in range(int(start), int(end) + 1):
                 print("x:" + str(x))
                 look(x)
 
