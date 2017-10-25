@@ -1,4 +1,4 @@
-import socketserver, re, socket, time, datetime, threading, sys, os, time, itertools, os.path
+import socketserver, re, socket, time, datetime, threading, sys, os, time, itertools, os.path, random
 
 TTL_INIT = 7200
 LOCATION = ""
@@ -417,7 +417,9 @@ def user_input(e):
         elif find_many:
             start = find_many.group(1)
             end = find_many.group(2)
-            for x in range(int(start), int(end) + 1):
+            indices = list(range(int(start), int(end) + 1))
+            random.shuffle(indices)
+            for x in indices:
                 print("File:" + str(x))
                 look(x)
         else:
