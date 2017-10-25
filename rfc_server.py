@@ -1,4 +1,4 @@
-import socketserver, re, socket, time, datetime, threading, sys, os, time
+import socketserver, re, socket, time, datetime, threading, sys, os, time, itertools
 
 TTL_INIT = 7200
 LOCATION = ""
@@ -246,12 +246,20 @@ def rfc_queri(hostname, port):
     temp = ""
     recieved = ""
 
+    size = 0
+
     try:
         sock.connect((hostname, int(port)))
         sock.sendall(bytes("RFCQuery: " + str(PORT), "utf-8"))
 
-        size = int(str(sock.recv(1024), "utf-8"))
+        first_rec = str(sock.recv(1024), "utf-8")
 
+        try:
+            size = int(first_rec)
+        except ValueError:
+            pos = first_rec.find("\n")
+            size = int("".join(itertools.takewhile(str.isdigit, first_rec)))
+            recieved += first_rec[len(str(size)):]
         while size > 0:
             temp = str(sock.recv(1024), "utf-8")
             recieved += temp
@@ -274,9 +282,14 @@ def git_rfc(hostname, port, num):
         sock.connect((hostname, int(port)))
         sock.sendall(bytes("GetRFC: " + str(port) + " " + str(num), "utf-8"))
 
-        t = str(sock.recv(1024), "utf-8")
-        print("T:" + t)
-        size = int(t)
+        first_rec = str(sock.recv(1024), "utf-8")
+
+        try:
+            size = int(first_rec)
+        except ValueError:
+            pos = first_rec.find("\n")
+            size = int("".join(itertools.takewhile(str.isdigit, first_rec)))
+            recieved += first_rec[len(str(size)):]
         while size > 0:
             temp = str(sock.recv(1024), "utf-8")
             recieved += temp
