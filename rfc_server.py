@@ -5,6 +5,7 @@ LOCATION = ""
 HOST = ""
 PORT = 0
 REG_PORT = 65423
+# REG_HOST = "192.168.0.73"
 REG_HOST = "localhost"
 COOKIE = -1
 ttl = 0
@@ -57,6 +58,9 @@ class RFCIndex():
         return str(self._num) + "|" + self._title + "|" + self._hostname + "|" + str(self._port) + "|" + str(self._ttl)
 
 
+class ThreadedRFCServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    pass
+
 class RFCServer(socketserver.BaseRequestHandler):
     """
     """
@@ -81,10 +85,20 @@ class RFCServer(socketserver.BaseRequestHandler):
             port = rfc_query.group(1)
             
             data = ''
+
             for key, value in _index_dict.items():
-                data += str(value) + '\n'  
+                data += str(value) + '`'
             data = data[:-1]
-            self.request.sendall(data.encode("utf8"))
+
+            size = len(data)
+
+            while size > 0:
+                size -= LENGTH
+                self.request.sendall((data[:1024]).encode("utf8"))
+                data = data[1024:]
+
+            self.request.sendall(("Finished: " + str(REG_PORT)).encode("utf8"))
+            
             print("\nRFC Query Sent\n\nEnter command: ")
 
         # A peer requests to download a specific RFC document from a remote peer.
@@ -110,9 +124,8 @@ class RFCServer(socketserver.BaseRequestHandler):
             print("\nRFC File Sent\n\nEnter command: ")
 
 def merge(data):
-    for index in data.split("\n"):
+    for index in data.split("`"):
         split_index = index.split("|")
-
         num = split_index[0]
         title = split_index[1]
         hostname = split_index[2]
@@ -230,11 +243,18 @@ def p_queri():
 def rfc_queri(hostname, port):
     global PORT
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    temp = ""
+    recieved = ""
+
     try:
         sock.connect((hostname, int(port)))
         sock.sendall(bytes("RFCQuery: " + str(PORT), "utf-8"))
 
-        recieved = str(sock.recv(1024), "utf-8")
+        while temp != "Finished: " + str(REG_PORT):
+            temp = str(sock.recv(1024), "utf-8")
+            if temp != "Finished: " + str(REG_PORT):
+                recieved += temp
+
         merge(recieved)
     finally:
         sock.close()
@@ -245,7 +265,7 @@ def git_rfc(hostname, port, num):
     global LOCATION, file_counter, total_time
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        fil = LOCATION + num + ".txt"
+        fil = LOCATION + str(num) + ".txt"
         recieved = ""
         temp = ""
 
@@ -283,9 +303,10 @@ def git_rfc(hostname, port, num):
     totT.close()
 
 def search(num):
-    return {v for k,v in _index_dict.items() if k.startswith(num)}
+    return {v for k,v in _index_dict.items() if k.startswith(str(num))}
 
 def look(num):
+    global HOST, PORT
     found = False
     temp_index = search(num)
     if not temp_index:
@@ -294,6 +315,8 @@ def look(num):
             peer = d.split(":")
             hostname = peer[0]
             port = peer[1]
+            if str(hostname) == str(HOST) and str(port) == str(PORT):
+                continue
             rfc_queri(hostname, port)
             temp_index = search(num)
             
@@ -305,7 +328,7 @@ def look(num):
         if not found:
             print("RFC not in P2P network.\n")
     else:
-        if (num + "_" + HOST + "_" + str(PORT)) in temp_index:
+        if (str(num) + "_" + HOST + "_" + str(PORT)) in temp_index:
             print("Already in this peer.\n\n")
         else:
             first_temp_index = next(iter(temp_index))
@@ -326,7 +349,7 @@ def user_input(e):
         rfc_query = re.search('RFCQuery: (.+) (\d+)', command)
         # Numbers are hostname, port number and RFC number
         get_rfc = re.search('GetRFC: (.+) (\d+) (\d+)', command) 
-        find = re.search('Search: (\d+)', command)
+        find = re.search('Search: (\d+)$', command)
         find_many = re.search('Search: (\d+)-(\d+)', command)
         if register:
             regis()
@@ -349,9 +372,10 @@ def user_input(e):
             num = find.group(1)
             look(num)
         elif find_many:
-            start = find.group(1)
-            end = find.group(2)
-            for x in range(start, end):
+            start = find_many.group(1)
+            end = find_many.group(2)
+            for x in range(int(start), int(end)):
+                print("x:" + str(x))
                 look(x)
 
 if __name__ == "__main__":
@@ -371,8 +395,13 @@ if __name__ == "__main__":
         sinT.close()
         totT.close()
 
-        server = socketserver.TCPServer((HOST, PORT), RFCServer)
+        server = ThreadedRFCServer((HOST, PORT), RFCServer)
         print(server)
+
+        server_thread = threading.Thread(target=server.serve_forever)
+        # Exit the server thread when the main thread terminates
+        server_thread.daemon = True
+        server_thread.start()
 
         # Loops through all files to add them to the dictionary by RFC number
         for root, dirs, filenames in os.walk(LOCATION):
@@ -388,8 +417,6 @@ if __name__ == "__main__":
         # Thread for taking user input
         t2 = threading.Thread(target=user_input, args=(e,))
         t2.start()
-
-        server.serve_forever()
 
     except(KeyboardInterrupt, SystemExit):
         print("Exiting...")
