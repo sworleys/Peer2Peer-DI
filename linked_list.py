@@ -1,89 +1,93 @@
 from abc import ABC, abstractmethod
 
-# Node class in LinkedList
+__author__ = "Stephen Wolrey, Louis Le"
+__credits__ = ["Stephen Worley, Louis Le"]
+__license__ = "GPL"
+__maintainer__ = "Stephen Worley"
+__email__ = "sworley1995@gmail.com"
+__status__ = "Development"
+
+
 class Node(ABC):
-    """
-    """
-    # variable to hold next node in list
-    __next = None
+    """Abstract Node Class
 
     """
-    Constructor: creates Node object and sets data field
-    :param data: holds data of node
-    """
+    # variable to hold next node in list
+    _next = None
+
     @abstractmethod
     def __init__(self, data):
         pass
 
-    """
-    Returns next node
-    :return: next node in list
-    """
+
     def get_next(self):
-        return self.__next
+        """Return next Node in list
 
-    """
-    Sets next node in the list
-    :param newNext: next node in list
-    """
+        """
+
+        return self._next
+
+
     def set_next(self, newNext):
-        self.__next = newNext
+        """Set next Node in list
 
-    """
+        """
 
-    Checks if specified node is equal
-    :param node: given node
-    :returns: true if node is equal
-    """
-    @abstractmethod
-    def equals(self, node):
-        return
+        self._next = newNext
 
-# LinkedList class
+
+
 class LinkedList(ABC):
-    """
-    """
+    """Linked List Class
 
     """
-    Constructor: sets head of list to none
-    """
+
     def __init__(self):
-        self.__head = None
+        """Linked List Constructor
 
-    """
-    Tells if LinkedList is empty
-    :return: turn if list is empty
-    """
+        """
+
+        self._head = None
+
+
     def is_empty(self):
-        return self.__head == None
+        """Checks if list is empty
 
-    """
-    Returns head of the LinkedList
-    @return head node of list
-    """
+        """
+
+        return self._head == None
+
+
     def get_head(self):
-        return self.__head
+        """Returns head of list
 
-    """
-    Sets the head of the list with the given node
-    :param node: given node to be head of the list
-    """
+        """
+
+        return self._head
+
+
     def add_head(self, node):
-        node.set_next(self.__head)
-        self.__head = node
+        """Add Node to head of list
 
-    """
-    Returns size of the list
-    :returns: size of list
-    """
+        """
+
+        node.set_next(self._head)
+        self._head = node
+
+
     def size(self):
+        """Calculates the size of the list
+
+        """
+
         count = 0
-        current = self.__head
+        current = self._head
         while current:
             count += 1
             current = current.get_next()
 
         return count
+
 
     @abstractmethod
     def search(self, item):
