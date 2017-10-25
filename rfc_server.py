@@ -1,4 +1,4 @@
-import socketserver, re, socket, time, datetime, threading, sys, os, time, itertools
+import socketserver, re, socket, time, datetime, threading, sys, os, time, itertools, os.path
 
 TTL_INIT = 7200
 LOCATION = ""
@@ -111,17 +111,24 @@ class RFCServer(socketserver.BaseRequestHandler):
             port = get_rfc.group(1)
             rfc_num = get_rfc.group(2)
 
-            data = open(LOCATION + rfc_num + '.txt', 'r').read()
-            size = len(data)
+            
+            if os.path.isfile(LOCATION + rfc_num + '.txt'):
+                data = open(LOCATION + rfc_num + '.txt', 'r').read()
 
-            self.request.sendall(str(size).encode("utf8"))
+                size = len(data)
 
-            while size > 0:
-                size -= LENGTH
-                self.request.sendall((data[:1024]).encode("utf8"))
-                data = data[1024:]
+                self.request.sendall(str(size).encode("utf8"))
 
-            print("\nRFC File Sent\n\nEnter command: ")
+                while size > 0:
+                    size -= LENGTH
+                    self.request.sendall((data[:1024]).encode("utf8"))
+                    data = data[1024:]
+
+                print("\nRFC File Sent\n\nEnter command: ")
+            else: 
+                self.request.sendall("RFC File Not Found".encode("utf8"))
+                print("\nRFC File Not Found\n\nEnter command: ")
+            
 
 def merge(data):
     for index in data.split("`"):
@@ -237,6 +244,9 @@ def p_queri():
         sock.close()
 
     print(recieved)
+
+    if len(recieved) > 0 and recieved[-1] == "\n":
+        recieved =recieved[:-1]
     data = recieved.split("\n")
     return data
 
@@ -283,6 +293,13 @@ def git_rfc(hostname, port, num):
         sock.sendall(bytes("GetRFC: " + str(port) + " " + str(num), "utf-8"))
 
         first_rec = str(sock.recv(1024), "utf-8")
+
+        not_found = re.search("RFC File Not Found", first_rec)
+
+        if not_found:
+            print("RFC File Not Found")
+            sock.close()
+            return
 
         try:
             size = int(first_rec)
@@ -331,6 +348,8 @@ def look(num):
 
         data = p_queri()
         for d in data:
+            if(len(d) == 0):
+                continue
             peer = d.split(":")
             hostname = peer[0]
             port = peer[1]
@@ -397,6 +416,8 @@ def user_input(e):
             for x in range(int(start), int(end) + 1):
                 print("x:" + str(x))
                 look(x)
+        else:
+            print("Invalid command.\n")
 
 if __name__ == "__main__":
 
