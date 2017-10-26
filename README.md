@@ -4,6 +4,12 @@ Elementary Peer 2 Peer System with distributed index.
 -----
 SETUP
 -----
+
+This project is best used with a VirtualEnv. Please use this if you wish by running in your terminal(bash):
+    source ./bin/activate
+
+
+
 When you start the registration server(RS), nothing will happen but it is running; it will print out respective messages
 when a peer contacts it. 
 
@@ -21,7 +27,7 @@ To run the registration server:
 To run a peer server:
     python rfc_server.py <hostname> <RFC location> <port>
 
-   	Example: python rfc_server.py localhost ./P0/ 1234
+   	Example: python rfc_server.py localhost ./peers/P0 1234
 
 ------
 INPUTS
@@ -31,14 +37,13 @@ THe user will interact only with the RFC servers and registration server will re
 
 Below are the commands a user can enter:
 
-"Register" - the RFC server will automatically register itself with the RS. The RS will print
-	"Register: <port>" and the RFC server should print "Peer recieved" and "Cookie: <cookie num>"
+"Register" - the RFC server will automatically register itself with the RS by sending "Register: <port>" and the RFC server should print "Peer recieved" and "Cookie: <cookie num>"
 
-"PQuery" - the RFC server will request from the RS a list of all active peers. It will print out the query for the user to see
+"PQuery" - the RFC server will request from the RS a list of all active peers by sending "PQuery". It will print out the query for the user to see
 
-"KeepAlive" - the RFC server will tell the RS to reset its TTL to 7200. It will print "Refreshed" for confirmation
+"KeepAlive" - the RFC server will tell the RS to reset its TTL to 7200 by sending "KeepAlive: <cookie>". It will print "Refreshed" for confirmation
 
-"Leave" - the RFC server will tell the RS that it wants to be turned inactive, so the RFC server does so. The RFc server will print "Left"
+"Leave" - the RFC server will tell the RS that it wants to be turned inactive by sending "Leave: <cookie>". The RFc server will print "Left"
 
 "RFCQuery: <hostname> <port>" - the RFC server will reach out to another peer with the specified hostname and port to request its RFC index, it will then merge it with its own. The peer that is giving the index will print "RFC Query Request" and then "RFC Query Sent"
 
