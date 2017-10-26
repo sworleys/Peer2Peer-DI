@@ -72,6 +72,7 @@ class RFCServer(socketserver.BaseRequestHandler):
         global _cookie_index
         LENGTH = 1024
         self.data = str(self.request.recv(1024).strip(), "utf-8")
+        print(self.data)
         # Number is port number
         rfc_query = re.search('RFCQuery: (\d+)', self.data)
         # Numbers are port number and RFC number 
@@ -79,7 +80,7 @@ class RFCServer(socketserver.BaseRequestHandler):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
         # A peer requests the RFC index from a remote peer.
         if rfc_query:
-            print("\nRFC Query Request")
+            #print("\nRFC Query Request")
             try:
                 hostname = socket.gethostbyaddr(self.client_address[0])[0]
             except:
@@ -101,11 +102,11 @@ class RFCServer(socketserver.BaseRequestHandler):
                 self.request.sendall((data[:1024]).encode("utf8"))
                 data = data[1024:]            
             
-            print("\nRFC Query Sent\n\nEnter command: ")
+            #print("\nRFC Query Sent\n\nEnter command: ")
 
         # A peer requests to download a specific RFC document from a remote peer.
         elif get_rfc:
-            print("\nRFC File Request")
+            #print("\nRFC File Request")
             try:
                 hostname = socket.gethostbyaddr(self.client_address[0])[0]
             except:
@@ -126,7 +127,7 @@ class RFCServer(socketserver.BaseRequestHandler):
                     self.request.sendall((data[:1024]).encode("utf8"))
                     data = data[1024:]
 
-                print("\nRFC File Sent: " + str(rfc_num) + "\n\nEnter command: ")
+                #print("\nRFC File Sent: " + str(rfc_num) + "\n\nEnter command: ")
             else: 
                 self.request.sendall("RFC File Not Found".encode("utf8"))
                 print("\nRFC File Not Found: " + str(rfc_num) + "\n\nEnter command: ")
@@ -267,6 +268,7 @@ def rfc_queri(hostname, port):
         sock.sendall(bytes("RFCQuery: " + str(PORT), "utf-8"))
 
         first_rec = str(sock.recv(1024), "utf-8")
+        print(first_rec)
 
         try:
             size = int(first_rec)
@@ -298,6 +300,8 @@ def git_rfc(hostname, port, num):
 
         first_rec = str(sock.recv(1024), "utf-8")
 
+        print(first_rec)
+
         not_found = re.search("RFC File Not Found", first_rec)
 
         if not_found:
@@ -313,6 +317,7 @@ def git_rfc(hostname, port, num):
             recieved += first_rec[len(str(size)):]
         while size > 0:
             temp = str(sock.recv(1024), "utf-8")
+            print(temp)
             recieved += temp
             size -= 1024
         f = open(fil, "w+")
@@ -459,7 +464,7 @@ if __name__ == "__main__":
                 _index_dict[str(rfc_num) + "_" + HOST + "_" + str(PORT)] = rfc
 
         server = ThreadedRFCServer((HOST, PORT), RFCServer)
-        print(server)
+        #print(server)
 
         server_thread = threading.Thread(target=server.serve_forever)
         # Exit the server thread when the main thread terminates
